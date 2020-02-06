@@ -21,7 +21,7 @@ import (
 // Bitbucket - plugin main structure
 type Bitbucket struct {
 	Owner               string            `toml:"owner"`
-	OwnerType           string            `toml:"owner_type"`
+	GatherType          string            `toml:"gather_type"`
 	OAuthKey            string            `toml:"oauth_key"`
 	OAuthSecret         string            `toml:"oauth_secret"`
 	BitbucketAPIBaseURL string            `toml:"bitbucket_api_base_url"`
@@ -31,12 +31,15 @@ type Bitbucket struct {
 
 const sampleConfig = `
   ## Owner account name
-  ## Will gather all pull requests authored by team members
-  ## Will gather all pull requests on all repositories owned by individual user
+  ## Can be either team name or username
   owner = ""
 
-  ## Owner type: can be either "team" for a team, or "user" for an individual user
-  owner_type = "team"
+  ## Gather type
+  ## Can be either "team" to get PRs authored by all team members, "user" to get PRs
+  ## authored by an individual user, or "repos" to get PRs on all repos owned by "owner".
+  ## Note: due to the rate limit on Bitbucket API repository endpoints, if a large number of
+  ## repositories are owned by a team or user, the "repos" option may fail.
+  gather_type = "team"
 
   ## Bitbucket OAuth consumer key and secret
   ## Enable the "private consumer" option to enable the client_credentials grant type
@@ -68,12 +71,19 @@ func (bb *Bitbucket) Gather(acc telegraf.Accumulator) error {
 		bb.client = bb.newClient(ctx, bb.OAuthKey, bb.OAuthSecret)
 	}
 
-	if bb.OwnerType == "team" {
+	if bb.GatherType == "team" {
 		bb.gatherTeam(bb.client, bb.Owner, acc)
-	} else if bb.OwnerType == "user" {
-		bb.gatherUser(bb.client, bb.Owner, acc)
+	} else if bb.GatherType == "user" {
+		users := []user{
+			user{
+				ID: bb.Owner,
+			},
+		}
+		bb.getUserPRs(bb.client, users, acc)
+	} else if bb.GatherType == "repos" {
+		bb.gatherRepos(bb.client, bb.Owner, acc)
 	} else {
-		err := fmt.Errorf("invalid owner type, must be either `team` or `user`")
+		err := fmt.Errorf("invalid gather_type, must be either `team`, `user`, or `repos`")
 		acc.AddError(err)
 		return err
 	}
@@ -86,24 +96,24 @@ func (bb *Bitbucket) gatherTeam(client *http.Client, team string, acc telegraf.A
 		acc.AddError(err)
 		return
 	}
+	bb.getUserPRs(client, members, acc)
+}
 
+func (bb *Bitbucket) getUserPRs(client *http.Client, members []user, acc telegraf.Accumulator) {
 	var prs []pullRequest
 	var wg sync.WaitGroup
 	wg.Add(len(members))
 	mtx := sync.Mutex{}
 	for _, m := range members {
-		prURL := fmt.Sprintf("%s/pullrequests/%s", bb.BitbucketAPIBaseURL, url.PathEscape(m.UUID))
+		prURL := fmt.Sprintf("%s/pullrequests/%s", bb.BitbucketAPIBaseURL, url.PathEscape(m.ID))
 		go bb.getPRs(client, prURL, &mtx, &wg, acc, &prs)
 	}
 	wg.Wait()
 
-	now := time.Now()
-	for _, p := range prs {
-		acc.AddFields("bitbucket", getPRFields(p), getPRTags(p), now)
-	}
+	accumulatePRs(prs, acc)
 }
 
-func (bb *Bitbucket) gatherUser(client *http.Client, user string, acc telegraf.Accumulator) {
+func (bb *Bitbucket) gatherRepos(client *http.Client, user string, acc telegraf.Accumulator) {
 	repos, err := bb.getRepos(client, user)
 	if err != nil {
 		fmt.Println(err)
@@ -120,23 +130,27 @@ func (bb *Bitbucket) gatherUser(client *http.Client, user string, acc telegraf.A
 	}
 	wg.Wait()
 
+	accumulatePRs(prs, acc)
+}
+
+func accumulatePRs(prs []pullRequest, acc telegraf.Accumulator) {
 	now := time.Now()
 	for _, p := range prs {
 		acc.AddFields("bitbucket", getPRFields(p), getPRTags(p), now)
 	}
 }
 
-func (bb *Bitbucket) getTeamMembers(client *http.Client, team string) ([]member, error) {
+func (bb *Bitbucket) getTeamMembers(client *http.Client, team string) ([]user, error) {
 	memberURL := fmt.Sprintf("%s/users/%s/members", bb.BitbucketAPIBaseURL, team)
 	fields := "values.uuid"
-	rawMembers, err := bb.paginatedGet(client, memberURL, fields, "100")
+	rawMembers, err := paginatedGet(client, memberURL, fields, "100")
 	if err != nil {
 		return nil, err
 	}
 
-	parsedMembers := make([]member, 0)
+	parsedMembers := make([]user, 0)
 	for _, m := range rawMembers {
-		var currMember member
+		var currMember user
 		err = json.Unmarshal(m, &currMember)
 		if err != nil {
 			return nil, err
@@ -150,7 +164,7 @@ func (bb *Bitbucket) getRepos(client *http.Client, owner string) ([]repository, 
 	repoURL := fmt.Sprintf("%s/repositories/%s", bb.BitbucketAPIBaseURL, owner)
 	fields := "values.name,values.full_name,values.slug"
 	// pagelen of 100 is maximum page length
-	rawRepos, err := bb.paginatedGet(client, repoURL, fields, "100")
+	rawRepos, err := paginatedGet(client, repoURL, fields, "100")
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +192,7 @@ func (bb *Bitbucket) getPRs(client *http.Client, prURL string, mtx *sync.Mutex,
 		"values.destination.repository.name,values.destination.branch,values.participants.role," +
 		"values.participants.user.display_name,values.participants.approved,values.links.html"
 	// pagelen of 25 because the api doesn't like pagelen 100 on the pullrequests endpoint
-	rawPRs, err := bb.paginatedGet(client, prURL, fields, "25")
+	rawPRs, err := paginatedGet(client, prURL, fields, "25")
 	if err != nil {
 		acc.AddError(err)
 		return
@@ -211,7 +225,7 @@ func (bb *Bitbucket) newClient(ctx context.Context, key, secret string) *http.Cl
 	return client
 }
 
-func (bb *Bitbucket) paginatedGet(client *http.Client, reqURL, fields, pagelen string) ([]json.RawMessage, error) {
+func paginatedGet(client *http.Client, reqURL, fields, pagelen string) ([]json.RawMessage, error) {
 	currURL := reqURL
 	values := make([]json.RawMessage, 0)
 
@@ -233,6 +247,9 @@ func (bb *Bitbucket) paginatedGet(client *http.Client, reqURL, fields, pagelen s
 		resp, err := client.Do(req)
 		if err != nil {
 			return nil, err
+		}
+		if resp.StatusCode < 200 || resp.StatusCode > 299 {
+			return nil, fmt.Errorf("Response from Bitbucket API: %s", resp.Status)
 		}
 
 		body, err := ioutil.ReadAll(resp.Body)
@@ -288,6 +305,7 @@ func getPRFields(p pullRequest) map[string]interface{} {
 		"dest_branch":   p.Destination.Branch.Name,
 		"reviewers":     reviewers,
 		"not_approved":  notApproved,
+		"link":          p.Links.HTML.HREF,
 	}
 }
 

@@ -38,10 +38,7 @@ type participant struct {
 
 type user struct {
 	DisplayName string `json:"display_name"`
-}
-
-type member struct {
-	UUID string `json:"uuid"`
+	ID          string `json:"UUID"`
 }
 
 type merge struct {
