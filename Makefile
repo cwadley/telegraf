@@ -148,3 +148,22 @@ ci-1.13:
 ci-1.12:
 	docker build -t quay.io/influxdb/telegraf-ci:1.12.14 - < scripts/ci-1.12.docker
 	docker push quay.io/influxdb/telegraf-ci:1.12.14
+
+.PHONY: teletracking-build
+teletracking-build:
+	env GOOS=linux GOARCH=amd64 go build -ldflags " -X main.commit=ebd22d8f -X main.branch=TOOLS-244" ./cmd/telegraf
+
+.PHONY: teletracking-docker-build
+IMAGE_NAME = "docker-dev.teledev.io/telegraf"
+teletracking-docker-build:
+	docker build -t $(IMAGE_NAME):latest .
+
+IMAGE_VERSION = $(shell date +%s)
+.PHONY: teletracking-docker-push
+teletracking-docker-push:
+	docker build \
+	-t $(IMAGE_NAME):latest \
+	-t $(IMAGE_NAME):$(IMAGE_VERSION) \
+	.
+	docker push $(IMAGE_NAME):latest
+	docker push $(IMAGE_NAME):$(IMAGE_VERSION)

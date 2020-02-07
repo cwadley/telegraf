@@ -1,0 +1,37 @@
+---
+image:
+  name: docker.teledev.io/build_images/bash_lint:latest
+  username: $NEXUS_BUILD_USERNAME
+  password: $NEXUS_BUILD_PASSWORD
+
+definitions:
+  steps:
+    - step: &build
+        services:
+          - docker
+        script:
+          - >
+            docker login $NEXUS_DOCKER_URL
+            -u $NEXUS_BUILD_USERNAME
+            -p $NEXUS_BUILD_PASSWORD
+          - make teletracking-build
+    - step: &build-and-push
+        services:
+          - docker
+        script:
+          - >
+            docker login $NEXUS_DOCKER_URL
+            -u $NEXUS_BUILD_USERNAME
+            -p $NEXUS_BUILD_PASSWORD
+          - make teletracking-push
+  services:
+    docker:
+      memory: 1024
+
+pipelines:
+  pull-requests:
+    '**':
+      - step: *teletracking-build
+  branches:
+    '{master}':
+      - step: *teletracking-push
