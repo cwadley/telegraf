@@ -77,6 +77,10 @@
 
 #### Release Notes
 
+## v1.13 [2019-12-12]
+
+#### Release Notes
+
 - Official packages built with Go 1.13.5.
 - The `prometheus` input and `prometheus_client` output have a new mapping to
   and from Telegraf metrics, which can be enabled by setting `metric_version = 2`.
