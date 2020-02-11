@@ -188,9 +188,11 @@ func (bb *Bitbucket) getPRs(client *http.Client, prURL string, mtx *sync.Mutex,
 
 	fields := "values.id,values.title,values.description,values.state,values.comment_count," +
 		"values.author.display_name, values.author.nickname,values.created_on," +
-		"values.updated_on,values.source.repository.name,values.source.branch," +
-		"values.destination.repository.name,values.destination.branch,values.participants.role," +
-		"values.participants.user.display_name,values.participants.approved,values.links.html"
+		"values.updated_on,values.source.repository.name,values.source.repository.full_name," +
+		"values.source.repository.slug,values.source.branch,values.destination.repository.name," +
+		"values.destination.repository.full_name,values.destination.repository.slug," +
+		"values.destination.branch,values.participants.role,values.participants.user.display_name," +
+		"values.participants.approved,values.links.html"
 	// pagelen of 25 because the api doesn't like pagelen 100 on the pullrequests endpoint
 	rawPRs, err := paginatedGet(client, prURL, fields, "25")
 	if err != nil {
@@ -275,19 +277,21 @@ func paginatedGet(client *http.Client, reqURL, fields, pagelen string) ([]json.R
 
 func getPRFields(p pullRequest) map[string]interface{} {
 	reviewers := ""
-	notApproved := ""
+	approved := ""
 	for _, r := range p.Participants {
 		if r.Role == "REVIEWER" {
 			if reviewers != "" {
 				reviewers += ", "
 			}
-			reviewers += r.User.DisplayName
-			if !r.Approved {
-				if notApproved != "" {
-					notApproved += ", "
+
+			if r.Approved {
+				reviewers += "\u2705"
+				if approved != "" {
+					approved += ", "
 				}
-				notApproved += r.User.DisplayName
+				approved += r.User.DisplayName
 			}
+			reviewers += r.User.DisplayName
 		}
 	}
 
@@ -304,7 +308,7 @@ func getPRFields(p pullRequest) map[string]interface{} {
 		"dest_repo":     p.Destination.Repository.Name,
 		"dest_branch":   p.Destination.Branch.Name,
 		"reviewers":     reviewers,
-		"not_approved":  notApproved,
+		"approved":      approved,
 		"link":          p.Links.HTML.HREF,
 	}
 }
