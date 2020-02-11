@@ -192,7 +192,7 @@ func (bb *Bitbucket) getPRs(client *http.Client, prURL string, mtx *sync.Mutex,
 		"values.source.repository.slug,values.source.branch,values.destination.repository.name," +
 		"values.destination.repository.full_name,values.destination.repository.slug," +
 		"values.destination.branch,values.participants.role,values.participants.user.display_name," +
-		"values.participants.approved,values.links.html"
+		"values.participants.approved,values.links.html,values.task_count"
 	// pagelen of 25 because the api doesn't like pagelen 100 on the pullrequests endpoint
 	rawPRs, err := paginatedGet(client, prURL, fields, "25")
 	if err != nil {
@@ -300,6 +300,7 @@ func getPRFields(p pullRequest) map[string]interface{} {
 		"title":         p.Title,
 		"pr_state":      p.State,
 		"comment_count": p.CommentCount,
+		"task_count":    p.TaskCount,
 		"author":        p.Author.DisplayName,
 		"created_on":    p.CreatedOn.Unix(),
 		"updated_on":    p.UpdatedOn.Unix(),
