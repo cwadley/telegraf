@@ -21,6 +21,7 @@ type pullRequest struct {
 	Title        string        `json:"title"`
 	State        string        `json:"state"`
 	CommentCount int           `json:"comment_count"`
+	TaskCount    int           `json:"task_count"`
 	Author       user          `json:"author"`
 	CreatedOn    time.Time     `json:"created_on"`
 	UpdatedOn    time.Time     `json:"updated_on"`
