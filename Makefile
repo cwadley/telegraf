@@ -154,7 +154,7 @@ teletracking-build:
 	env GOOS=linux GOARCH=amd64 go build -ldflags " -X main.commit=ebd22d8f -X main.branch=TOOLS-244" ./cmd/telegraf
 
 .PHONY: teletracking-docker-build
-IMAGE_NAME = "docker-dev.teledev.io/telegraf"
+IMAGE_NAME = "docker.teledev.io/telegraf"
 teletracking-docker-build:
 	docker build -t $(IMAGE_NAME):latest .
 
