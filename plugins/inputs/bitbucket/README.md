@@ -9,12 +9,15 @@ When set to a user, all pull requests in repos owned by the user will be collect
 ```toml
 [[inputs.bitbucket]]
   ## Owner account name
-  ## Will gather all pull requests authored by team members
-  ## Will gather all pull requests on all repositories owned by individual user
+  ## Can be either team name or username
   owner = ""
 
-  ## Owner type: can be either "team" for a team, or "user" for an individual user
-  owner_type = "team"
+  ## Gather type
+  ## Can be either "team" to get PRs authored by all team members, "user" to get PRs
+  ## authored by an individual user, or "repos" to get PRs on all repos owned by "owner".
+  ## Note: due to the rate limit on Bitbucket API repository endpoints, if a large number of
+  ## repositories are owned by a team or user, the "repos" option may fail.
+  gather_type = "team"
 
   ## Bitbucket OAuth consumer key and secret
   ## Enable the "private consumer" option to enable the client_credentials grant type

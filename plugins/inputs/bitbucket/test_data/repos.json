@@ -1,0 +1,14 @@
+{
+  "values": [
+    {
+      "name": "example-repo1",
+      "full_name": "example-team/example-repo1",
+      "slug": "example-repo1"
+    },
+    {
+      "name": "example-repo2",
+      "full_name": "example-team/example-repo2",
+      "slug": "example-repo2"
+    }
+  ]
+}

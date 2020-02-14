@@ -1,0 +1,6 @@
+{
+    "next": "https://example.com?page=2",
+    "values": [
+        {"page": 1}
+    ]
+}
