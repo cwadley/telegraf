@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
 	"sync"
 	"time"
 
@@ -26,7 +25,16 @@ type Bitbucket struct {
 	OAuthSecret         string            `toml:"oauth_secret"`
 	BitbucketAPIBaseURL string            `toml:"bitbucket_api_base_url"`
 	HTTPTimeout         internal.Duration `toml:"http_timeout"`
-	client              *http.Client
+	client              oAuthClient
+}
+
+type oAuthClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+type accumulator interface {
+	AddFields(string, map[string]interface{}, map[string]string, ...time.Time)
+	AddError(error)
 }
 
 const sampleConfig = `
@@ -68,20 +76,34 @@ func (bb *Bitbucket) Gather(acc telegraf.Accumulator) error {
 	ctx := context.Background()
 
 	if bb.client == nil {
-		bb.client = bb.newClient(ctx, bb.OAuthKey, bb.OAuthSecret)
+		bb.client = newClient(ctx, bb.OAuthKey, bb.OAuthSecret)
 	}
 
 	if bb.GatherType == "team" {
-		bb.gatherTeam(bb.client, bb.Owner, acc)
+		members, err := bb.getTeamMembers(bb.Owner)
+		if err != nil {
+			acc.AddError(err)
+			return err
+		}
+		prs := bb.getUserPRs(members, acc)
+		accumulatePRs(prs, acc)
 	} else if bb.GatherType == "user" {
 		users := []user{
 			user{
 				ID: bb.Owner,
 			},
 		}
-		bb.getUserPRs(bb.client, users, acc)
+		prs := bb.getUserPRs(users, acc)
+		accumulatePRs(prs, acc)
 	} else if bb.GatherType == "repos" {
-		bb.gatherRepos(bb.client, bb.Owner, acc)
+		repos, err := bb.getRepos(bb.Owner)
+		if err != nil {
+			acc.AddError(err)
+			return nil
+		}
+
+		prs := bb.getReposPRs(bb.Owner, repos, acc)
+		accumulatePRs(prs, acc)
 	} else {
 		err := fmt.Errorf("invalid gather_type, must be either `team`, `user`, or `repos`")
 		acc.AddError(err)
@@ -90,60 +112,38 @@ func (bb *Bitbucket) Gather(acc telegraf.Accumulator) error {
 	return nil
 }
 
-func (bb *Bitbucket) gatherTeam(client *http.Client, team string, acc telegraf.Accumulator) {
-	members, err := bb.getTeamMembers(client, team)
-	if err != nil {
-		acc.AddError(err)
-		return
-	}
-	bb.getUserPRs(client, members, acc)
-}
-
-func (bb *Bitbucket) getUserPRs(client *http.Client, members []user, acc telegraf.Accumulator) {
+func (bb *Bitbucket) getUserPRs(members []user, acc accumulator) []pullRequest {
 	var prs []pullRequest
 	var wg sync.WaitGroup
 	wg.Add(len(members))
 	mtx := sync.Mutex{}
 	for _, m := range members {
 		prURL := fmt.Sprintf("%s/pullrequests/%s", bb.BitbucketAPIBaseURL, url.PathEscape(m.ID))
-		go bb.getPRs(client, prURL, &mtx, &wg, acc, &prs)
+		go bb.getPRs(prURL, &mtx, &wg, acc, &prs)
 	}
 	wg.Wait()
 
-	accumulatePRs(prs, acc)
+	return prs
 }
 
-func (bb *Bitbucket) gatherRepos(client *http.Client, user string, acc telegraf.Accumulator) {
-	repos, err := bb.getRepos(client, user)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
+func (bb *Bitbucket) getReposPRs(user string, repos []repository, acc accumulator) []pullRequest {
 	var prs []pullRequest
 	var wg sync.WaitGroup
 	wg.Add(len(repos))
 	mtx := sync.Mutex{}
 	for _, r := range repos {
 		prURL := fmt.Sprintf("%s/repositories/%s/%s/pullrequests", bb.BitbucketAPIBaseURL, user, r.Slug)
-		go bb.getPRs(client, prURL, &mtx, &wg, acc, &prs)
+		go bb.getPRs(prURL, &mtx, &wg, acc, &prs)
 	}
 	wg.Wait()
 
-	accumulatePRs(prs, acc)
+	return prs
 }
 
-func accumulatePRs(prs []pullRequest, acc telegraf.Accumulator) {
-	now := time.Now()
-	for _, p := range prs {
-		acc.AddFields("bitbucket", getPRFields(p), getPRTags(p), now)
-	}
-}
-
-func (bb *Bitbucket) getTeamMembers(client *http.Client, team string) ([]user, error) {
+func (bb *Bitbucket) getTeamMembers(team string) ([]user, error) {
 	memberURL := fmt.Sprintf("%s/users/%s/members", bb.BitbucketAPIBaseURL, team)
 	fields := "values.uuid"
-	rawMembers, err := paginatedGet(client, memberURL, fields, "100")
+	rawMembers, err := bb.paginatedGet(memberURL, fields, "100")
 	if err != nil {
 		return nil, err
 	}
@@ -160,11 +160,11 @@ func (bb *Bitbucket) getTeamMembers(client *http.Client, team string) ([]user, e
 	return parsedMembers, nil
 }
 
-func (bb *Bitbucket) getRepos(client *http.Client, owner string) ([]repository, error) {
+func (bb *Bitbucket) getRepos(owner string) ([]repository, error) {
 	repoURL := fmt.Sprintf("%s/repositories/%s", bb.BitbucketAPIBaseURL, owner)
 	fields := "values.name,values.full_name,values.slug"
 	// pagelen of 100 is maximum page length
-	rawRepos, err := paginatedGet(client, repoURL, fields, "100")
+	rawRepos, err := bb.paginatedGet(repoURL, fields, "100")
 	if err != nil {
 		return nil, err
 	}
@@ -182,8 +182,8 @@ func (bb *Bitbucket) getRepos(client *http.Client, owner string) ([]repository, 
 	return parsedRepos, nil
 }
 
-func (bb *Bitbucket) getPRs(client *http.Client, prURL string, mtx *sync.Mutex,
-	wg *sync.WaitGroup, acc telegraf.Accumulator, out *[]pullRequest) {
+func (bb *Bitbucket) getPRs(prURL string, mtx *sync.Mutex,
+	wg *sync.WaitGroup, acc accumulator, out *[]pullRequest) {
 	defer wg.Done()
 
 	fields := "values.id,values.title,values.description,values.state,values.comment_count," +
@@ -194,7 +194,7 @@ func (bb *Bitbucket) getPRs(client *http.Client, prURL string, mtx *sync.Mutex,
 		"values.destination.branch,values.participants.role,values.participants.user.display_name," +
 		"values.participants.approved,values.links.html,values.task_count"
 	// pagelen of 25 because the api doesn't like pagelen 100 on the pullrequests endpoint
-	rawPRs, err := paginatedGet(client, prURL, fields, "25")
+	rawPRs, err := bb.paginatedGet(prURL, fields, "25")
 	if err != nil {
 		acc.AddError(err)
 		return
@@ -216,7 +216,14 @@ func (bb *Bitbucket) getPRs(client *http.Client, prURL string, mtx *sync.Mutex,
 	mtx.Unlock()
 }
 
-func (bb *Bitbucket) newClient(ctx context.Context, key, secret string) *http.Client {
+func accumulatePRs(prs []pullRequest, acc accumulator) {
+	now := time.Now()
+	for _, p := range prs {
+		acc.AddFields("bitbucket", getPRFields(p), getPRTags(p), now)
+	}
+}
+
+func newClient(ctx context.Context, key, secret string) *http.Client {
 	conf := clientcredentials.Config{
 		ClientID:     key,
 		ClientSecret: secret,
@@ -227,7 +234,7 @@ func (bb *Bitbucket) newClient(ctx context.Context, key, secret string) *http.Cl
 	return client
 }
 
-func paginatedGet(client *http.Client, reqURL, fields, pagelen string) ([]json.RawMessage, error) {
+func (bb *Bitbucket) paginatedGet(reqURL, fields, pagelen string) ([]json.RawMessage, error) {
 	currURL := reqURL
 	values := make([]json.RawMessage, 0)
 
@@ -246,7 +253,7 @@ func paginatedGet(client *http.Client, reqURL, fields, pagelen string) ([]json.R
 		}
 		req.URL.RawQuery = q.Encode()
 
-		resp, err := client.Do(req)
+		resp, err := bb.client.Do(req)
 		if err != nil {
 			return nil, err
 		}
@@ -278,6 +285,7 @@ func paginatedGet(client *http.Client, reqURL, fields, pagelen string) ([]json.R
 func getPRFields(p pullRequest) map[string]interface{} {
 	reviewers := ""
 	approved := ""
+	approvals := 0
 	for _, r := range p.Participants {
 		if r.Role == "REVIEWER" {
 			if reviewers != "" {
@@ -290,27 +298,29 @@ func getPRFields(p pullRequest) map[string]interface{} {
 					approved += ", "
 				}
 				approved += r.User.DisplayName
+				approvals++
 			}
 			reviewers += r.User.DisplayName
 		}
 	}
 
 	return map[string]interface{}{
-		"id":            p.ID,
-		"title":         p.Title,
-		"pr_state":      p.State,
-		"comment_count": p.CommentCount,
-		"task_count":    p.TaskCount,
-		"author":        p.Author.DisplayName,
-		"created_on":    p.CreatedOn.Unix(),
-		"updated_on":    p.UpdatedOn.Unix(),
-		"src_repo":      p.Source.Repository.Name,
-		"src_branch":    p.Source.Branch.Name,
-		"dest_repo":     p.Destination.Repository.Name,
-		"dest_branch":   p.Destination.Branch.Name,
-		"reviewers":     reviewers,
-		"approved":      approved,
-		"link":          p.Links.HTML.HREF,
+		"id":             p.ID,
+		"title":          p.Title,
+		"pr_state":       p.State,
+		"comment_count":  p.CommentCount,
+		"task_count":     p.TaskCount,
+		"author":         p.Author.DisplayName,
+		"created_on":     p.CreatedOn.Unix(),
+		"updated_on":     p.UpdatedOn.Unix(),
+		"src_repo":       p.Source.Repository.Name,
+		"src_branch":     p.Source.Branch.Name,
+		"dest_repo":      p.Destination.Repository.Name,
+		"dest_branch":    p.Destination.Branch.Name,
+		"reviewers":      reviewers,
+		"approved":       approved,
+		"approval_count": approvals,
+		"link":           p.Links.HTML.HREF,
 	}
 }
 

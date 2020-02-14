@@ -1,0 +1,68 @@
+{
+    "values": [
+      {
+        "display_name": "Goldie Locks",
+        "has_2fa_enabled": null,
+        "links": {
+          "hooks": {
+            "href": "https://example.com"
+          },
+          "self": {
+            "href": "https://example.com"
+          },
+          "repositories": {
+            "href": "https://example.com"
+          },
+          "html": {
+            "href": "https://example.com"
+          },
+          "avatar": {
+            "href": "https://example.com"
+          },
+          "snippets": {
+            "href": "https://example.com"
+          }
+        },
+        "nickname": "goldie-locks",
+        "account_id": "c5e7f61cc1eab55f9e28bd3c",
+        "created_on": "2019-06-04T15:37:56.357797+00:00",
+        "is_staff": false,
+        "account_status": "active",
+        "type": "user",
+        "properties": {},
+        "uuid": "{6ccb2745-fe26-4fcf-9641-fc780c35f944}"
+      },
+      {
+        "display_name": "Hunky Dunky",
+        "has_2fa_enabled": null,
+        "links": {
+          "hooks": {
+            "href": "https://example.com"
+          },
+          "self": {
+            "href": "https://example.com"
+          },
+          "repositories": {
+            "href": "https://example.com"
+          },
+          "html": {
+            "href": "https://example.com"
+          },
+          "avatar": {
+            "href": "https://example.com"
+          },
+          "snippets": {
+            "href": "https://example.com"
+          }
+        },
+        "nickname": "Hunky Dunky",
+        "account_id": "e698ea7a301e2a2dd757d081",
+        "created_on": "2018-04-23T14:59:26.419405+00:00",
+        "is_staff": false,
+        "account_status": "active",
+        "type": "user",
+        "properties": {},
+        "uuid": "{db48b438-e516-4c0e-9b19-43a8d7895faf}"
+      }
+    ]
+}

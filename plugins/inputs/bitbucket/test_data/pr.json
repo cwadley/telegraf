@@ -1,0 +1,151 @@
+{
+    "pagelen": 10,
+    "values": [
+      {
+        "description": "example pr description",
+        "links": {
+          "decline": {
+            "href": "https://example.com"
+          },
+          "diffstat": {
+            "href": "https://example.com"
+          },
+          "commits": {
+            "href": "https://example.com"
+          },
+          "self": {
+            "href": "https://example.com"
+          },
+          "comments": {
+            "href": "https://example.com"
+          },
+          "merge": {
+            "href": "https://example.com"
+          },
+          "html": {
+            "href": "https://example.com/html"
+          },
+          "activity": {
+            "href": "https://example.com"
+          },
+          "diff": {
+            "href": "https://example.com"
+          },
+          "approve": {
+            "href": "https://example.com"
+          },
+          "statuses": {
+            "href": "https://example.com"
+          }
+        },
+        "title": "example-pr",
+        "close_source_branch": true,
+        "type": "pullrequest",
+        "id": 1,
+        "destination": {
+          "commit": {
+            "hash": "d8793545a987",
+            "type": "commit",
+            "links": {
+              "self": {
+                "href": "https://example.com"
+              },
+              "html": {
+                "href": "https://example.com"
+              }
+            }
+          },
+          "repository": {
+            "links": {
+              "self": {
+                "href": "https://example.com"
+              },
+              "html": {
+                "href": "https://example.com"
+              },
+              "avatar": {
+                "href": "https://example.com"
+              }
+            },
+            "type": "repository",
+            "name": "example-repo",
+            "full_name": "example-team/example-repo",
+            "uuid": "{f7230a53-42a3-412a-825a-f1039cc68b91}"
+          },
+          "branch": {
+            "name": "master"
+          }
+        },
+        "created_on": "2020-02-03T20:30:46.058076+00:00",
+        "summary": {
+          "raw": "example commit message",
+          "markup": "markdown",
+          "html": "example commit message",
+          "type": "rendered"
+        },
+        "source": {
+          "commit": {
+            "hash": "584f5a78b4ce",
+            "type": "commit",
+            "links": {
+              "self": {
+                "href": "https://example.com"
+              },
+              "html": {
+                "href": "https://example.com"
+              }
+            }
+          },
+          "repository": {
+            "links": {
+              "self": {
+                "href": "https://example.com"
+              },
+              "html": {
+                "href": "https://example.com"
+              },
+              "avatar": {
+                "href": "https://example.com"
+              }
+            },
+            "type": "repository",
+            "name": "example-repo",
+            "slug": "example-repo",
+            "full_name": "example-team/example-repo",
+            "uuid": "{4ccb9855-f9f6-4a5a-9496-2c13cb69d424}"
+          },
+          "branch": {
+            "name": "example_branch"
+          }
+        },
+        "comment_count": 2,
+        "state": "OPEN",
+        "task_count": 1,
+        "reason": "",
+        "updated_on": "2020-02-03T20:37:08.129390+00:00",
+        "author": {
+          "display_name": "Example Dude",
+          "uuid": "{4e031025-e127-41a4-809c-58eeda824e39}",
+          "links": {
+            "self": {
+              "href": "https://example.com"
+            },
+            "html": {
+              "href": "https://example.com"
+            },
+            "avatar": {
+              "href": "https://example.com"
+            }
+          },
+          "nickname": "Example Dude",
+          "type": "user",
+          "account_id": "875196:69c0bf95-9211-4bd0-b6d6-b92295b1f6f9"
+        },
+        "merge_commit": null,
+        "closed_by": null
+      }
+    ],
+    "page": 1,
+    "size": 1
+  }
+  
